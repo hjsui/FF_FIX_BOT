@@ -3,11 +3,10 @@ import json
 import logging
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from telegram.constants import ParseMode
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ========== إعدادات ==========
-BOT_TOKEN = "8749300647:AAH9UpuLTDW8mYc3eWBD97jY12MDRGzw6k8"
+BOT_TOKEN = os.environ.get("8749300647:AAH9UpuLTDW8mYc3eWBD97jY12MDRGzw6k8")
 PASSWORD = "555451265696++ftytyuiuliyty6654923//fyytu@moslim.com"
 
 # البوتات الثلاثة
@@ -18,17 +17,11 @@ BOTS = {
 }
 
 DATA_FILE = "users_stats.json"
-LOG_FILE = "bot_logs.txt"
 
 # تفعيل التسجيل
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 # ============================
-
-def log_message(msg):
-    """تسجيل الأحداث"""
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.now()} - {msg}\n")
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -52,11 +45,9 @@ def add_user(user_id, username):
             "token_checks": 0,
             "email_checks": 0,
             "spam_actions": 0,
-            "join_date": str(datetime.now()),
-            "last_active": str(datetime.now())
+            "join_date": str(datetime.now())
         }
         save_data(data)
-        log_message(f"مستخدم جديد: {username} ({user_id})")
 
 def update_stats(user_id, action):
     data = load_data()
@@ -68,19 +59,7 @@ def update_stats(user_id, action):
             data[uid]["email_checks"] += 1
         elif action == "spam":
             data[uid]["spam_actions"] += 1
-        data[uid]["last_active"] = str(datetime.now())
         save_data(data)
-        log_message(f"تحديث إحصاء: {action} لـ {data[uid]['username']}")
-
-def get_top_users(limit=5):
-    """الحصول على أكثر المستخدمين نشاطاً"""
-    data = load_data()
-    users = []
-    for uid, info in data.items():
-        total = info["token_checks"] + info["email_checks"] + info["spam_actions"]
-        users.append((info["username"], total))
-    users.sort(key=lambda x: x[1], reverse=True)
-    return users[:limit]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -90,169 +69,64 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args and context.args[0] == PASSWORD:
         add_user(user_id, username)
         await update.message.reply_text(
-            "✨ *مرحباً بك في البوت المركزي المتطور!* ✨\n\n"
-            "✅ تم تسجيلك بنجاح\n"
-            "🎯 استخدم الأزرار للوصول إلى جميع الخدمات\n"
-            "📊 يمكنك متابعة إحصائياتك الشخصية\n\n"
-            "_تمتع بتجربة مميزة_ 🤍",
-            parse_mode=ParseMode.MARKDOWN
+            "✅ *تم التسجيل بنجاح!*\nأهلاً بك في البوت المركزي 🤍",
+            parse_mode="Markdown"
         )
         await show_menu(update, context)
     elif is_authorized(user_id):
         await show_menu(update, context)
     else:
         await update.message.reply_text(
-            "🔐 *وصول مقيد*\n\n"
-            "هذا البوت خاص بالأعضاء المسجلين فقط.\n\n"
-            f"للتسجيل، أرسل:\n`/start {PASSWORD}`",
-            parse_mode=ParseMode.MARKDOWN
+            f"🔐 *هذا البوت خاص*\n\nللتسجيل، أرسل:\n`/start {PASSWORD}`",
+            parse_mode="Markdown"
         )
 
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض القائمة الرئيسية المتطورة"""
     keyboard = [
         [InlineKeyboardButton("🔑 توكن الحساب", callback_data="token")],
         [InlineKeyboardButton("📧 بريد الاستعادة", callback_data="email")],
         [InlineKeyboardButton("💥 سبام احترافي", callback_data="spam")],
-        [InlineKeyboardButton("📊 إحصائياتي", callback_data="stats")],
-        [InlineKeyboardButton("🏆 ترتيب المستخدمين", callback_data="top")],
-        [InlineKeyboardButton("ℹ️ معلومات البوت", callback_data="info")]
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data="stats")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        "🌟 *القائمة الرئيسية المتطورة* 🌟\n\n"
-        "اختر الخدمة التي تريدها:\n"
-        "━━━━━━━━━━━━━━━━━━━",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
+    await update.message.reply_text("📋 *القائمة الرئيسية*\nاختر الخدمة:", reply_markup=reply_markup, parse_mode="Markdown")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     user_id = query.from_user.id
     
     if not is_authorized(user_id):
-        await query.edit_message_text("⛔ *غير مصرح لك باستخدام هذا البوت*", parse_mode=ParseMode.MARKDOWN)
+        await query.edit_message_text("⛔ غير مصرح لك.")
         return
     
     action = query.data
     
     if action == "token":
         update_stats(user_id, "token")
-        await query.edit_message_text(
-            f"🔑 *طريقة الحصول على توكن*\n\n"
-            f"1️⃣ افتح البوت: {BOTS['token']}\n"
-            f"2️⃣ اتبع التعليمات\n"
-            f"3️⃣ ستحصل على التوكن المطلوب\n\n"
-            f"✅ *تم تسجيل العملية* | عدد المحاولات: {load_data()[str(user_id)]['token_checks']}",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    
+        await query.edit_message_text(f"🔑 استخدم البوت: {BOTS['token']}\n✅ تم تسجيل العملية.")
     elif action == "email":
         update_stats(user_id, "email")
-        await query.edit_message_text(
-            f"📧 *كشف بريد الاستعادة*\n\n"
-            f"• البوت المختص: {BOTS['email']}\n"
-            f"• أرسل التوكن وسيتم كشف البريد\n\n"
-            f"✅ *تم تسجيل العملية* | عدد المحاولات: {load_data()[str(user_id)]['email_checks']}",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    
+        await query.edit_message_text(f"📧 استخدم البوت: {BOTS['email']}\n✅ تم تسجيل العملية.")
     elif action == "spam":
         update_stats(user_id, "spam")
-        await query.edit_message_text(
-            f"💥 *نظام السبام الاحترافي*\n\n"
-            f"• البوت: {BOTS['spam']}\n"
-            f"• يقوم بعمليات متعددة على الحساب\n\n"
-            f"✅ *تم تسجيل العملية* | عدد المحاولات: {load_data()[str(user_id)]['spam_actions']}",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    
+        await query.edit_message_text(f"💥 استخدم البوت: {BOTS['spam']}\n✅ تم تسجيل العملية.")
     elif action == "stats":
         data = load_data()
         uid = str(user_id)
         if uid in data:
             s = data[uid]
-            total = s['token_checks'] + s['email_checks'] + s['spam_actions']
-            text = (
-                f"📊 *إحصائياتك الشخصية*\n\n"
-                f"🔑 التوكن: `{s['token_checks']}`\n"
-                f"📧 البريد: `{s['email_checks']}`\n"
-                f"💥 السبام: `{s['spam_actions']}`\n"
-                f"━━━━━━━━━━━━━━━\n"
-                f"📈 *المجموع:* `{total}`\n\n"
-                f"📅 تاريخ التسجيل: `{s['join_date'][:10]}`\n"
-                f"👤 المستخدم: @{s['username']}"
-            )
+            text = (f"📊 إحصائياتك:\n🔑 {s['token_checks']}\n📧 {s['email_checks']}\n💥 {s['spam_actions']}")
         else:
-            text = "📊 لا توجد إحصائيات مسجلة"
-        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-    
-    elif action == "top":
-        top_users = get_top_users()
-        text = "🏆 *قائمة الأكثر نشاطاً* 🏆\n\n"
-        for i, (username, total) in enumerate(top_users, 1):
-            medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else f"{i}."
-            text += f"{medal} @{username} → {total} عملية\n"
-        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-    
-    elif action == "info":
-        data = load_data()
-        total_users = len(data)
-        total_actions = sum(sum(info[k] for k in ['token_checks', 'email_checks', 'spam_actions']) for info in data.values())
-        text = (
-            "ℹ️ *معلومات البوت*\n\n"
-            f"👥 عدد المستخدمين: `{total_users}`\n"
-            f"📊 إجمالي العمليات: `{total_actions}`\n"
-            f"🤖 البوت: مركزي متطور\n"
-            f"💎 الإصدار: 2.0\n\n"
-            "_تم التطوير للحصول على أفضل تجربة_"
-        )
-        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """أمر المساعدة"""
-    await update.message.reply_text(
-        "📚 *قائمة الأوامر المتاحة*\n\n"
-        "/start - بدء البوت والتسجيل\n"
-        "/help - عرض هذه المساعدة\n"
-        "/stats - عرض إحصائياتك\n"
-        "/top - عرض الترتيب\n\n"
-        "_استخدم الأزرار للتنقل بسهولة_",
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """أمر الإحصائيات المباشر"""
-    user_id = update.effective_user.id
-    if is_authorized(user_id):
-        data = load_data()
-        uid = str(user_id)
-        if uid in data:
-            s = data[uid]
-            total = s['token_checks'] + s['email_checks'] + s['spam_actions']
-            await update.message.reply_text(
-                f"📊 إحصائياتك: {total} عملية\n"
-                f"🔑 {s['token_checks']} | 📧 {s['email_checks']} | 💥 {s['spam_actions']}",
-                parse_mode=ParseMode.MARKDOWN
-            )
+            text = "لا توجد إحصائيات"
+        await query.edit_message_text(text)
 
 def main():
-    """تشغيل البوت"""
-    print("🚀 جاري تشغيل البوت المركزي المتطور...")
-    
+    print("🚀 جاري تشغيل البوت...")
     app = Application.builder().token(BOT_TOKEN).build()
-    
-    # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("✅ البوت شغال بنجاح! | النسخة المتطورة 2.0")
+    print("✅ البوت شغال بنجاح!")
     app.run_polling()
 
 if __name__ == "__main__":
